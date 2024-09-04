@@ -10,17 +10,16 @@ import CandidateDashboard from './components/CandidateDashboard';
 import ManagerDashboard from './components/ManagerDashboard';
 // import AdminDashboard from './components/AdminDashboard';
 import JobCreateEdit from './components/JobCreateEdit';
-import UserCreateEdit from './components/UserCreateEdit';
 import ProtectedRoute from './components/ProtectedRoute';
 import Profile from './components/Profile'; 
-import getLoggedInUser from './services/authService';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import JobSearch from './components/JobSearch';
 import ApplicationsView from './components/ApplicationsView';
 
 
 function App() {
-  const user = getLoggedInUser(); // Get the current user details (role included)
+  const user = JSON.parse(localStorage.getItem('loggedInUser'));
+
   const [loggedIn, setLoggedIn] = useState(false);
 
   useEffect(() => {
