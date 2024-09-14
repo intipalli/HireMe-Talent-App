@@ -9,6 +9,7 @@ function UserCreateEdit() {
     username: '',
     email: '',
     type: 'candidate', // default type
+    
   });
 
   useEffect(() => {

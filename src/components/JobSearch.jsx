@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
-const JobSearch = ({ onApplyClick }) => {
+const JobSearch = ({ onApplyClick, userId }) => {
   const [jobs, setJobs] = useState([]);
   const [filteredJobs, setFilteredJobs] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -16,7 +16,9 @@ const JobSearch = ({ onApplyClick }) => {
     // Fetch jobs
     axios.get('http://localhost:8080/jobs')
       .then(response => {
+
         const openJobs = response.data.filter(job => job.listingStatus === 'OPEN');
+        console.log(openJobs);
         setJobs(openJobs);
         setFilteredJobs(openJobs);
         const uniqueDepartments = [...new Set(openJobs.map(job => job.department))];
@@ -26,11 +28,13 @@ const JobSearch = ({ onApplyClick }) => {
     
     // Fetch user applications
     const fetchUserApplications = async () => {
-      const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
-      if (loggedInUser) {
+      if (userId) {
         try {
-          const response = await axios.get(`http://localhost:8080/applications/candidate/${loggedInUser.id}`);
-          setUserApplications(response.data.map(app => app.jobId));
+          const response = await axios.get(`http://localhost:8080/applications/candidate/${userId}`);
+          if(response)
+            setUserApplications(response.data.map(app => app.jobId)); 
+          else
+            return;
         } catch (error) {
           console.error('Error fetching applications:', error);
         }
@@ -38,7 +42,7 @@ const JobSearch = ({ onApplyClick }) => {
     };
 
     fetchUserApplications();
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     let filtered = jobs.filter(job =>
@@ -62,11 +66,10 @@ const JobSearch = ({ onApplyClick }) => {
   };
 
   const handleApplyClick = (jobId) => {
-    const user = JSON.parse(localStorage.getItem('loggedInUser'));
-    if (!user) {
+    if (!userId) {
       navigate('/login');
     } else {
-      onApplyClick(jobId);
+      onApplyClick(jobId); 
     }
   };
 

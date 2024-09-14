@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import JobSearch from './JobSearch';
+import { Modal, Button } from 'react-bootstrap';
 
 const CandidateDashboard = () => {
     const [applications, setApplications] = useState([]);
@@ -8,11 +9,14 @@ const CandidateDashboard = () => {
     const [resume, setResume] = useState(null);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    const [showConfirmModal, setShowConfirmModal] = useState(false);
+    const [applicationToDelete, setApplicationToDelete] = useState(null);
+
+    const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
 
     useEffect(() => {
         // Fetch user profile
         const fetchUserProfile = async () => {
-            const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
             if (loggedInUser) {
                 try {
                     const response = await axios.get(`http://localhost:8080/candidates/${loggedInUser.id}`);
@@ -26,7 +30,6 @@ const CandidateDashboard = () => {
 
         // Fetch candidate applications
         const fetchApplications = async () => {
-            const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
             if (loggedInUser) {
                 try {
                     const response = await axios.get(`http://localhost:8080/applications/candidate/${loggedInUser.id}`);
@@ -42,7 +45,9 @@ const CandidateDashboard = () => {
     }, []);
 
     const handleApplyForJob = async (jobId) => {
-        const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
+
+        console.log(user);
+        
 
         if (!loggedInUser) {
             // User is not logged in
@@ -53,6 +58,14 @@ const CandidateDashboard = () => {
 
         if (!user || !resume) {
             setError('Your profile is not complete. Please ensure your profile is updated with resume.');
+            return;
+        }
+
+        // Check if the user has already applied for this job
+        const alreadyApplied = applications.some(application => application.job?.id === jobId);
+
+        if (alreadyApplied) {
+            setError('You have already applied for this job.');
             return;
         }
 
@@ -76,49 +89,41 @@ const CandidateDashboard = () => {
         }
     };
 
-    const handleWithdrawApplication = async (applicationId) => {
-        if (!applicationId) {
+    const handleWithdrawApplication = async () => {
+        if (!applicationToDelete) {
             setError('Invalid application ID.');
             return;
         }
 
         try {
-            await axios.delete(`http://localhost:8080/applications/${applicationId}`);
+            await axios.delete(`http://localhost:8080/applications/${applicationToDelete}`);
             setSuccess('Application withdrawn successfully!');
+            setShowConfirmModal(false);
 
-            const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
-
-            try {
-                const response = await axios.get(`http://localhost:8080/applications/candidate/${loggedInUser.id}`);
-
-                if (response.status === 200) {
-                    setApplications(response.data);
-                } else {
-                    setError('Unexpected response status while fetching applications.');
-                }
-            } catch (fetchError) {
-                if (fetchError.response?.status === 404) {
-                    setError('No applications found for this user.');
-                    setApplications([])
-                } else {
-                    setError('Error fetching applications.');
-                }
-                console.error('Error fetching applications:', fetchError);
-            }
+            const response = await axios.get(`http://localhost:8080/applications/candidate/${loggedInUser.id}`);
+            setApplications(response.data);
         } catch (error) {
             setError('Error withdrawing application.');
             console.error('Error withdrawing application:', error);
         }
     };
 
+    const confirmWithdrawApplication = (applicationId) => {
+        setApplicationToDelete(applicationId);
+        setShowConfirmModal(true);
+    };
+
+    const handleCloseModal = () => {
+        setShowConfirmModal(false);
+        setApplicationToDelete(null);
+    };
 
     return (
         <div className="container mt-5">
-            {/* <h4 className='mb-4 text-primary'>Candidate Dashboard</h4> */}
             {error && <div className="alert alert-danger" role="alert">{error}</div>}
             {success && <div className="alert alert-success" role="alert">{success}</div>}
             <div className="card p-4 shadow-lg">
-                <JobSearch onApplyClick={handleApplyForJob} userId={user?.id} />
+                <JobSearch onApplyClick={handleApplyForJob} userId={loggedInUser.id} />
             </div>
 
             <div className="mt-4 card p-4 shadow-lg">
@@ -128,7 +133,7 @@ const CandidateDashboard = () => {
                     <div className="table-responsive">
                         <table className="table table-hover">
                             <thead>
-                                <tr className=''>
+                                <tr>
                                     <th>Job Title</th>
                                     <th>Department</th>
                                     <th>Status</th>
@@ -141,18 +146,19 @@ const CandidateDashboard = () => {
                                         <td>{job?.jobTitle || 'N/A'}</td>
                                         <td>{job?.department || 'N/A'}</td>
                                         <td>
-                                            {application.applicationStatus === 'APPLIED' ? (
+                                            {application.applicationStatus === 'APPLIED' || application.applicationStatus === 'Accepted' ? (
                                                 <strong className="text-success">{application.applicationStatus}</strong>
                                             ) : (
-                                                application.applicationStatus
+                                                <strong className="text-danger">{application.applicationStatus}</strong>
                                             )}
                                         </td>
                                         <td>
                                             <button
                                                 className="btn btn-danger"
-                                                onClick={() => handleWithdrawApplication(application.id)}
+                                                onClick={() => confirmWithdrawApplication(application.id)}
+                                                disabled={application.applicationStatus === 'Accepted' || application.applicationStatus === 'Rejected'}
                                             >
-                                                Withdraw Application
+                                                {application.applicationStatus === 'Accepted' || application.applicationStatus === 'Rejected' ? 'Withdraw/Delete' : 'Withdraw Application'}
                                             </button>
                                         </td>
                                     </tr>
@@ -164,6 +170,22 @@ const CandidateDashboard = () => {
                     <p className="text-center">No applications found.</p>
                 )}
             </div>
+
+            {/* Bootstrap Modal for Confirming Withdraw/Delete */}
+            <Modal show={showConfirmModal} onHide={handleCloseModal}>
+                <Modal.Header closeButton>
+                    <Modal.Title>Confirm Action</Modal.Title>
+                </Modal.Header>
+                <Modal.Body>Are you sure you want to withdraw/delete this application?</Modal.Body>
+                <Modal.Footer>
+                    <Button variant="secondary" onClick={handleCloseModal}>
+                        Cancel
+                    </Button>
+                    <Button variant="danger" onClick={handleWithdrawApplication}>
+                        Confirm Withdraw/Delete
+                    </Button>
+                </Modal.Footer>
+            </Modal>
         </div>
     );
 };

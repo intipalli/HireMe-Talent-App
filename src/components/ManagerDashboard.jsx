@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
+import { Modal, Button } from 'react-bootstrap';
 
 function ManagerDashboard() {
     const [jobListings, setJobListings] = useState([]);
@@ -10,6 +11,12 @@ function ManagerDashboard() {
     const [selectedDepartment, setSelectedDepartment] = useState('ALL');
     const [departments, setDepartments] = useState([]);
     const [notification, setNotification] = useState(null);
+    const [expandedJobIds, setExpandedJobIds] = useState(new Set());
+
+    // State for managing modal visibility and job ID for actions
+    const [showModal, setShowModal] = useState(false);
+    const [modalAction, setModalAction] = useState(null);
+    const [selectedJobId, setSelectedJobId] = useState(null);
 
     useEffect(() => {
         const user = JSON.parse(localStorage.getItem('loggedInUser'));
@@ -73,6 +80,7 @@ function ManagerDashboard() {
                     job.id === jobId ? { ...job, listingStatus: 'CLOSED', dateClosed: new Date().toISOString() } : job
                 ));
                 setNotification({ type: 'success', message: 'Job closed successfully!' });
+                setShowModal(false);
             })
             .catch(error => {
                 setNotification({ type: 'danger', message: 'Error closing job.' });
@@ -103,6 +111,7 @@ function ManagerDashboard() {
                 setJobListings(jobListings.filter(job => job.id !== jobId));
                 setFilteredListings(filteredListings.filter(job => job.id !== jobId));
                 setNotification({ type: 'success', message: 'Job deleted successfully!' });
+                setShowModal(false);
             })
             .catch(error => {
                 setNotification({ type: 'danger', message: 'Error deleting job.' });
@@ -110,14 +119,39 @@ function ManagerDashboard() {
             });
     };
 
+    const handleShowModal = (action, jobId) => {
+        setModalAction(action);
+        setSelectedJobId(jobId);
+        setShowModal(true);
+    };
+
+    const handleConfirmAction = () => {
+        if (modalAction === 'close') {
+            handleCloseJob(selectedJobId);
+        } else if (modalAction === 'delete') {
+            handleDeleteJob(selectedJobId);
+        }
+    };
+
+    const toggleJobDetails = (jobId) => {
+        setExpandedJobIds(prev => {
+            const newExpandedJobIds = new Set(prev);
+            if (newExpandedJobIds.has(jobId)) {
+                newExpandedJobIds.delete(jobId);
+            } else {
+                newExpandedJobIds.add(jobId);
+            }
+            return newExpandedJobIds;
+        });
+    };
+
     return (
         <div className="container mt-5">
-
             <h2 className='text-primary'>Manager Dashboard</h2>
-
             <br />
             <div className="card p-4 shadow-lg">
-                <div>      <Link to="/job-create" className="btn btn-primary mb-3">Create New Job</Link>
+                <div>
+                    <Link to="/job-create" className="btn btn-primary mb-3">Create New Job</Link>
                 </div>
 
                 <div className="mb-4 d-flex justify-content-between align-items-center">
@@ -159,28 +193,40 @@ function ManagerDashboard() {
                                         {job.jobTitle}
                                     </h5>
                                     <h6 className="mb-2">Department: {job.department}</h6>
-                                    <p className="mb-1">Description: {job.jobDescription}</p>
-                                    {job.additionalInformation && <p className="mb-1">Additional Information: {job.additionalInformation}</p>}
-                                    <p className="mb-1"><small className="text-muted">Date Listed: {new Date(job.dateListed).toLocaleDateString()}</small></p>
-                                    {job.dateClosed && <p className="mb-1"><small className="text-muted">Date Closed: {new Date(job.dateClosed).toLocaleDateString()}</small></p>}
-
-                                    <div className="btn-group">
-                                        {job.listingStatus === 'OPEN' ? (
-                                            <>
-                                                <Link to={`/applications/${job.id}`} className="btn btn-warning btn-sm rounded">See Applications</Link>
-
-                                                <button className="btn btn-secondary btn-sm rounded" onClick={() => handleCloseJob(job.id)}>Close</button>
-                                                <button className="btn btn-danger btn-sm rounded" onClick={() => handleDeleteJob(job.id)}>Delete</button>
-
-                                            </>
-                                        ) : (
-                                            <>
-                                                <button className="btn btn-success btn-sm rounded" onClick={() => handleReopenJob(job.id)}>Reopen</button>
-                                                <button className="btn btn-danger btn-sm rounded" onClick={() => handleDeleteJob(job.id)}>Delete</button>
-                                            </>
-                                        )}
-                                        <Link to={`/job-edit/${job.id}`} className="btn btn-primary btn-sm ml-2">Edit</Link>
+                                    <p className="mb-1">Description: {expandedJobIds.has(job.id) ? job.jobDescription : `${job.jobDescription.substring(0, 100)}...`}</p>
+                                    {expandedJobIds.has(job.id) && job.additionalInformation && (
+                                        <p className="mb-1">Additional Information: {job.additionalInformation}</p>
+                                    )}
+                                    {expandedJobIds.has(job.id) && (
+                                        <>
+                                            <p className="mb-1"><small className="text-muted">Date Listed: {new Date(job.dateListed).toLocaleDateString()}</small></p>
+                                            {job.dateClosed && <p className="mb-1"><small className="text-muted">Date Closed: {new Date(job.dateClosed).toLocaleDateString()}</small></p>}
+                                        </>
+                                    )}
+                                    
+                                    <div className="mb-2">
+                                        <button className="btn btn-warning btn-sm rounded" onClick={() => toggleJobDetails(job.id)}>
+                                            {expandedJobIds.has(job.id) ? 'Show Less' : 'More Details/Actions'}
+                                        </button>
                                     </div>
+
+                                    {expandedJobIds.has(job.id) && (
+                                        <div className="btn-group">
+                                            {job.listingStatus === 'OPEN' ? (
+                                                <>
+                                                    <Link to={`/applications/${job.id}`} className="btn btn-success btn-sm rounded">See Applications</Link>
+                                                    <button className="btn btn-secondary btn-sm rounded" onClick={() => handleShowModal('close', job.id)}>Close</button>
+                                                    <button className="btn btn-danger btn-sm rounded" onClick={() => handleShowModal('delete', job.id)}>Delete</button>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <button className="btn btn-success btn-sm rounded" onClick={() => handleReopenJob(job.id)}>Reopen</button>
+                                                    <button className="btn btn-danger btn-sm rounded" onClick={() => handleShowModal('delete', job.id)}>Delete</button>
+                                                </>
+                                            )}
+                                            <Link to={`/job-edit/${job.id}`} className="btn btn-primary btn-sm ml-2">Edit</Link>
+                                        </div>
+                                    )}
                                 </li>
                             ))}
                         </ul>
@@ -189,6 +235,25 @@ function ManagerDashboard() {
                     )}
                 </div>
             </div>
+
+            {/* Confirmation Modal */}
+            <Modal show={showModal} onHide={() => setShowModal(false)}>
+                <Modal.Header closeButton>
+                    <Modal.Title>Confirm Action</Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    {modalAction === 'close' && 'Are you sure you want to close this job?'}
+                    {modalAction === 'delete' && 'Are you sure you want to delete this job?'}
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button variant="secondary" onClick={() => setShowModal(false)}>
+                        Cancel
+                    </Button>
+                    <Button variant="primary" onClick={handleConfirmAction}>
+                        Confirm
+                    </Button>
+                </Modal.Footer>
+            </Modal>
         </div>
     );
 }
